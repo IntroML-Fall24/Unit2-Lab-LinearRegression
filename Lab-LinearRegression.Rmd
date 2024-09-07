@@ -1,0 +1,222 @@
+---
+title: "Unit 2 Lab: Linear Regression"
+author: "Your Name"
+date: "Today's Date"
+output: 
+  html_document: 
+    theme: cerulean
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(eval = FALSE)
+```
+
+This lab is modeled after the lab at the end of Chapter 3 in *Introduction to Statistical Learning", and serves as a review of key concepts related to linear regression.
+
+This lab will require the `ISLR2` library, which includes the datasets for the book *Introduction to Statistical Learning*.  We will also be using functions from `tidyverse`.  You may need to install the `ISLR2` package by running the command `install.packages("ISLR2")` in your Console before beginning this lab.
+
+```{r libs, message = FALSE, echo = FALSE, warning = FALSE}
+library(ISLR2)
+library(tidyverse)
+library(broom)
+```
+
+The `ISLR2` library contains the `Boston` housing dataset, which records the `medv` (median house value) for 506 neighborhoods around Boston.  We will seek to predict `medv` using 13 predictors such as `rm` (average number of rooms per house), `age` (average age of houses), and `lstat` (percent of households with low socioeconomic status).  To find out more about the `Boston` dataset, type `?Boston` in your console to open the data dictionary.
+
+### Part 1:  Simple Linear Regression
+
+1.  We first will predict the median house value `medv` using the predictor variable `lstat`.  Before estimating our model, let's take a look at the relationship between our predictor variable and our response variable using a scatterplot.
+
+```{r}
+ggplot(Boston, aes(x = lstat, y = medv)) +
+  geom_point() +
+  labs(x = "Percent of Households with Low Socioeconomic Status",
+       y = "Median House Value ($)")
+```
+
+**How would you describe the relationship between `lstat` and `medv`?  Do you have any concerns about using a linear model to predict `medv` from `lstat`?**
+
+2.  Let's fit a linear model to predict `medv` from `lstat`.  We will then use various functions to examine the output.  The `summary()` function is in Base R, and `tidy()` and `glance()` are from the `tidyverse`-friendly package `broom`.  Run each code chunk below and note the differences in the displayed output for each function.
+
+```{r}
+m_simple <- lm(medv ~ lstat, data = Boston)
+
+```
+
+```{r}
+summary(m_simple)
+```
+```{r}
+library(broom)
+tidy(m_simple)
+glance(m_simple)
+```
+
+**Write down the equation of the model and interpret the coefficients in context.  Next, state the value of $R^2$.**
+
+3.  In order to obtain a confidence interval for the coefficient estimates, we can use the `confint()` function:
+
+```{r}
+confint(m_simple)
+```
+
+**Interpret the confidence interval for the slope coefficient.**
+
+4.  The `predict()` function can be used to produce confidence intervals and prediction intervals for the prediction of `medv` for a given value of `lstat`:
+
+```{r}
+newvalues <- tibble(lstat = c(5, 10, 15))
+predict(m_simple, newvalues, interval = "confidence")
+predict(m_simple, newvalues, interval = "prediction")
+```
+**Interpret what this output tells us.**
+
+5.  We will now plot `medv` and `lstat` along with the least squares regression line using two different methods.  The first uses functions from Base R:
+
+```{r}
+plot(Boston$lstat, Boston$medv)
+abline(m_simple)
+```
+
+The second method uses `ggplot` from `tidyverse`:
+
+```{r message = FALSE}
+ggplot(data = Boston, aes(x = lstat, y = medv)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "darkblue") +  # lm for linear model 
+  labs(x = "Percent of Households with Low Socioeconomic Status",
+       y = "Median House Value ($)")
+```
+
+
+6.  We are going to generate a residual plot for this model, especially since we might have some concerns about the linearity assumption.  We will generate the residual plot two different ways.  The first method uses Base R function:
+
+```{r}
+par(mfrow = c(2,2)) # tell R to split the display screen into a 2x2 grid 
+plot(m_simple)
+```
+
+The second method uses `ggplot` to generate the residual plot:
+
+```{r}
+m_simpleaug <- augment(m_simple) # generate residual and fitted values
+ggplot(m_simpleaug, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color = "blue", lty = 2) +
+  labs(x = "Predicted Value", y = "Residuals")
+```
+
+**What can you conclude looking at the residual plot?**
+
+
+7.  Leverage statistics can be computed for any number of predictors using the `hatvalues()` function:
+
+```{r}
+plot(hatvalues(m_simple))
+which.max(hatvalues(m_simple))
+```
+The `which.max()` function identifies the index of the largest element of a vector.  In this case, it tells us which observation has the largest leverage statistic.
+
+### Part 2:  Multiple Linear Regression
+
+8.  In order to fit a multiple linear regression model using least squares, we again use the `lm()` function.  The syntax `lm(y ~ x1 + x2 + x3)` is used to fit a model with three predictors, `x1`, `x2`, and `x3`.
+
+```{r}
+m_three <- lm(medv ~ lstat + age + crim, data = Boston)
+```
+
+The Boston dataset contains 12 variables, so it would be cumbersome to have to type all of the variable names in order to perform a regression using all of them.  Instead, we can use the following shorthand:
+
+```{r}
+m_all <- lm(medv ~ ., data = Boston)
+summary(m_all)
+```
+
+9.  The `vif()` function from the `car` package can be used to compute variance inflation factors.  The `car` package is not part of the Base R installation, so you may need to install it by running `install.packages("car")` in your console.
+
+Most VIFs are low to moderate for this data.
+
+```{r}
+library(car)
+vif(m_all)
+```
+
+10.  What if we want to perform a regression using all of the variables but one?  For example, in the above regression output, `age` has a high p-value.  We may wish to run a regression excluding this predictor.  The following syntax results in a regression using all predictors except `age`:
+
+```{r}
+m_all1 <- lm(medv ~ .-age, data = Boston)
+summary(m_all1)
+```
+
+11.  If you want to include interaction terms in the model, there are several ways to do it.  The syntax `lstat: crim` tells R to include an interaction term between `lstat` and `crim`.  The syntax `lstat*crim` simultaneously includes `lstat`, `crim`, and the interaction term `lstat` x `crim`; it is shorthand for `lstat` + `crim` + `lstat:crim`.
+
+```{r}
+m_int <- lm(medv ~ lstat * crim, data = Boston)
+summary(m_int)
+```
+
+**Suppose we want to predict `medv` from `lstat` and `chas`.  Do you think a linear model with main effects only or interaction effects is more appropriate?  Fit both models to support your answer.   Before fitting the model, convert `chas` to a factor using the code below.  Write down the models you get when `chas = 0` and when `chas = 1` for both cases.  Interpret the coefficients of the model that you ultimately select.**
+
+```{r}
+Boston <- Boston %>%
+  mutate(chas = as.factor(chas))
+```
+
+12.  Given a predictor $X$, we can create a predictor $X^2$ using `I(X^2)` in the `lm()` function call.  The function `I()` is needed since the `^` symbol has a special meaning in a formula; wrapping it in the `I()` function allows the standard usage in R.  Let's revisit the model we fit at the beginning of the lab where we used the variable `lstat` to predict `medv`.  Modify your earlier model to include the term $\mbox{lstat}^2$.  Did adding the squared term help?  Why or why not?  Include a plot of the model on a scatterplot of `lstat` versus `medv` and a residual plot to support your answer.
+
+13.  In order to create a cubic fit, we can include a predictor of the form `I(X^3)`.  However, this approach can get cumbersome for higher order polynomials.  A better approach involves using the `poly()` function to create the polynomial within the `lm()` function.  For example, the following command produces a fifth-order polynomial fit:
+
+```{r}
+m_fit5 <- lm(medv ~ poly(lstat, 5), data = Boston)
+
+```
+
+**Compare this model to the model you decided was the best fit in the previous question.**
+
+14.  As a last step, we will divide our data into training and testing sets and calculate the RMSE for our model in the previous question.  If our goal is prediction, we should split our data before doing any other exploratory data analysis or model building.
+The code below splits our data into 70% training and 30% testing using the function `initial_split()` from the `tidymodels` library:
+
+```{r message = FALSE}
+# Fix random numbers by setting the seed 
+# Enables analysis to be reproducible when random numbers are used 
+# You can use whatever seed you like!
+set.seed(1133)
+
+library(tidymodels)
+# Put 70% of the data into the training set 
+boston_split <- initial_split(Boston, prop = 0.70)
+
+# Create data frames for the two sets:
+boston_train <- training(boston_split)
+boston_test  <- testing(boston_split)
+```
+```{r}
+# fit the fifth degree polynomial model using the training data:
+m_fit5t <- lm(medv ~ poly(lstat, 5), data = boston_train)
+```
+
+
+
+```{r}
+# Calculate predicted values for the test set using the polynomial model:
+test_pred <- predict(m_fit5t, boston_test)
+
+# Calculate the RMSE
+sqrt(mean((boston_test$medv - test_pred)^2))
+```
+**What are the units of the resulting RMSE?**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
